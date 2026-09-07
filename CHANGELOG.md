@@ -9,15 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
-## [1.0.0] - 2026-09-07
+## [1.1.0] - 2026-09-07
 
 ### Added
 
-- **A CS2 server playing a Steam Workshop collection**, image pinned by
-  digest as an interpolation default, so `git pull` delivers the version this
-  repository has tested and `.env` overrides survive it. The plain
-  cs2-server-docker-compose template with a collection in front of it.
-- **Its own token, required.** A Game Server Login Token drives one server;
+- **`update.sh`: move between release tags on purpose.** It updates to the latest release (a combination this repository's CI has booted and smoke-tested), refuses to cross a major version unattended, refuses to run over local changes, and names any new required variable before anything has moved. `--dry-run` says what would happen.
+
+ired.** A Game Server Login Token drives one server;
   shared with another CS2 server, both drop off the list. Workshop downloads
   also require it, and without one the collection never arrives and nothing
   says why.
@@ -39,5 +37,6 @@ _(no unreleased changes yet)_
   and the latest image release, and the health-check suite. It deliberately
   does not boot the game.
 
-[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/releases/tag/v1.0.0

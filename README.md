@@ -47,7 +47,7 @@ docker compose -p cs2-classic exec cs2-classic-server rcon ds_workshop_changelev
 
 ## Updating
 
-The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the version this repository has tested. Valve updates CS2 often and the server refuses connections from a client on a newer build; the daily freshness check compares the pin against the latest image release and against the registry.
+The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the version this repository has tested. Valve updates CS2 often and the server refuses connections from a client on a newer build; the daily freshness check compares the pin against the latest image release and against the registry. `./update.sh` does that on purpose: it moves to the latest release tag, refuses to cross a major unattended, and names any new required variable before anything has moved.
 
 ## Testing
 
