@@ -1,0 +1,123 @@
+# Image pin lives HERE, as an interpolation default, so `git pull` (or
+# re-downloading this file) delivers the exact image this repository has
+# tested. Set CS2_CLASSIC_SERVER_IMAGE_VERSION in .env to run a different
+# version while the digest for it is fetched normally, or
+# CS2_CLASSIC_SERVER_IMAGE_TAG to replace the whole reference. CI (the Trivy
+# scan and check-pin-freshness) reads the pin from this line: this block is
+# the single source of truth.
+x-images:
+  cs2-classic-server: &cs2-classic-server-image ${CS2_CLASSIC_SERVER_IMAGE_TAG:-joedwards32/cs2:${CS2_CLASSIC_SERVER_IMAGE_VERSION:-4.0.1@sha256:34c093d24a23751fb409ae41dffe88884fb36964b365fcd25a31ec45e88ad8cf}}
+
+services:
+  cs2-classic-server:
+    image: *cs2-classic-server-image
+    # Handles untrusted input from the internet and cannot gain privileges
+    # through a setuid binary.
+    security_opt:
+      - no-new-privileges:true
+    # 6g, and the reason it is not 4g like the plain CS2 server: peak reads
+    # 14 GB on the machine this template comes from, which is SteamCMD's page
+    # cache during a game update, not the server — resident stays under 1 GB.
+    # Cache is reclaimed under a limit, never OOM-killed, so the ceiling only
+    # has to clear the resident set with room for a workshop download.
+    deploy:
+      resources:
+        limits:
+          memory: ${CS2_CLASSIC_SERVER_MEMORY_LIMIT:-6g}
+          cpus: "${CS2_CLASSIC_SERVER_CPU_LIMIT:-2.0}"
+        reservations:
+          memory: ${CS2_CLASSIC_SERVER_MEMORY_RESERVATION:-1g}
+          cpus: "${CS2_CLASSIC_SERVER_CPU_RESERVATION:-0.5}"
+    ports:
+      # THE NUMBER MUST MATCH INSIDE AND OUT. Steam's server list records the
+      # port the server binds, not the one you forwarded. Publish 27019 for a
+      # server bound on 27015 and the list hands players an address where a
+      # different server answers: the connection succeeds, the handshake fails
+      # against the wrong game, and every log line blames the client. Running
+      # this next to a plain CS2 server? Give this one 27019 in .env and let
+      # BOTH sides of the mapping carry it.
+      - "${CS2_CLASSIC_SERVER_PORT:-27015}:${CS2_CLASSIC_SERVER_PORT:-27015}/udp"
+      - "${CS2_CLASSIC_SERVER_PORT:-27015}:${CS2_CLASSIC_SERVER_PORT:-27015}/tcp"
+    environment:
+      # ITS OWN TOKEN. A Game Server Login Token drives one server only; a
+      # token shared with another CS2 server logs both out. And workshop
+      # downloads REQUIRE the token: without one the collection never arrives
+      # and the server starts on whatever it has, silently.
+      SRCDS_TOKEN: ${CS2_CLASSIC_SERVER_STEAM_TOKEN:?set in .env - see .env.example}
+      CS2_SERVERNAME: ${CS2_CLASSIC_SERVER_NAME:-CS2 Classic Maps}
+      CS2_RCONPW: ${CS2_CLASSIC_SERVER_RCON_PASSWORD:?set in .env - see .env.example for generation command}
+      CS2_PW: ${CS2_CLASSIC_SERVER_PASSWORD:-}
+      CS2_PORT: ${CS2_CLASSIC_SERVER_PORT:-27015}
+      CS2_RCON_PORT: ${CS2_CLASSIC_SERVER_PORT:-27015}
+      CS2_MAXPLAYERS: ${CS2_CLASSIC_SERVER_MAX_PLAYERS:-10}
+      CS2_GAMEALIAS: ${CS2_CLASSIC_SERVER_GAME_ALIAS:-casual}
+      CS2_MAPGROUP: ${CS2_CLASSIC_SERVER_MAP_GROUP:-mg_active}
+      CS2_STARTMAP: ${CS2_CLASSIC_SERVER_START_MAP:-de_dust2}
+      # THE COLLECTION IS THE SERVER. A Steam Workshop collection of the maps
+      # to host; the server downloads it at start and switches into workshop
+      # mode. The rotation in mapcycle.txt names maps that have to be IN it.
+      CS2_HOST_WORKSHOP_COLLECTION: ${CS2_CLASSIC_SERVER_WORKSHOP_COLLECTION:?set in .env - see .env.example}
+      # The workshop map to start on, by its file id. Empty = the first in the
+      # collection.
+      CS2_HOST_WORKSHOP_MAP: ${CS2_CLASSIC_SERVER_WORKSHOP_START_MAP:-}
+      CS2_BOT_QUOTA: ${CS2_CLASSIC_SERVER_BOT_QUOTA:-8}
+      CS2_BOT_QUOTA_MODE: ${CS2_CLASSIC_SERVER_BOT_QUOTA_MODE:-fill}
+      CS2_BOT_DIFFICULTY: ${CS2_CLASSIC_SERVER_BOT_DIFFICULTY:-2}
+      CS2_LOG: ${CS2_CLASSIC_SERVER_LOG:-on}
+      CS2_LOG_ECHO: ${CS2_CLASSIC_SERVER_LOG_ECHO:-1}
+      TZ: ${CS2_CLASSIC_SERVER_TIMEZONE:-UTC}
+    volumes:
+      - cs2-classic-server-data:/home/steam/cs2-dedicated
+      # The curated rotation, over the collection's full cycle.
+      - ./mapcycle.txt:/home/steam/cs2-dedicated/game/csgo/mapcycle.txt:ro
+      # Casual overrides: no warm-up, club-level bots that stay on an empty
+      # server. exec'd after the gamemode defaults, so these win — WHERE THE
+      # GAME LETS THEM. In workshop mode CS2 refuses some of them with
+      # "DISALLOWED WORKSHOP CONVAR" in the log, bot_quota among them, and the
+      # bots come back at the next map change. scripts/botguard.sh is the
+      # answer to that; see the README.
+      - ./gamemode_casual_server.cfg:/home/steam/cs2-dedicated/game/csgo/cfg/gamemode_casual_server.cfg:ro
+    healthcheck:
+      # EXACT MATCH, BECAUSE THE WRAPPER IS ALSO CALLED cs2. Two commands run in
+      # this container: `cs2`, the game, and `cs2.sh`, the script supervising
+      # it. A substring search is satisfied by either, so the game can die and
+      # leave the wrapper standing while the container goes on reporting
+      # healthy — and docker will not restart an unhealthy container anyway.
+      # `-x` anchors the match to the whole line, and a comm file holds only the
+      # name. tests/e2e-healthcheck.sh proves it against a real container.
+      test: ["CMD-SHELL", "grep -qsx cs2 /proc/[0-9]*/comm"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # First boot downloads roughly 60 GB of game content through SteamCMD and
+      # then the workshop collection. A short start_period marks the container
+      # unhealthy for the whole of it.
+      start_period: ${CS2_CLASSIC_SERVER_START_PERIOD:-90m}
+    # srcds writes its state on the way out. Ten seconds and a SIGKILL is
+    # enough to lose the last round and leave the game files mid-write.
+    stop_grace_period: ${CS2_CLASSIC_SERVER_STOP_GRACE_PERIOD:-30s}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CS2_CLASSIC_SERVER_LOG_MAX_SIZE:-10m}
+        max-file: "${CS2_CLASSIC_SERVER_LOG_MAX_FILE:-3}"
+
+# DECLARED EXTERNAL SO `docker compose down -v` CANNOT DELETE IT.
+#
+# This volume holds an 80 GB SteamCMD install of Counter-Strike 2 plus the
+# workshop collection. As a project-managed volume it is one `down -v` away
+# from being gone — and `down -v` is the command everybody reaches for when a
+# stack misbehaves. On a metered connection it comes back twice: once in
+# bytes and once on the bill.
+#
+# Create it before the first start:  docker volume create cs2-classic-server-data
+#
+# Running a plain CS2 server on the same host? Seed this volume from its
+# volume once (`docker run --rm -v cs2-server-data:/from:ro -v
+# cs2-classic-server-data:/to alpine cp -a /from/. /to/`) and skip the
+# second 60 GB download.
+volumes:
+  cs2-classic-server-data:
+    name: cs2-classic-server-data
+    external: true

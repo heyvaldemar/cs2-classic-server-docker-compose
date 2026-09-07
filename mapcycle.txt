@@ -1,0 +1,5 @@
+cs_assault
+cs_militia_css
+de_dust_hr
+de_aztec_hr
+de_tuscan_d
