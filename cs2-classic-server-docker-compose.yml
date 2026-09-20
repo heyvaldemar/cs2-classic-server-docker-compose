@@ -6,7 +6,7 @@
 # scan and check-pin-freshness) reads the pin from this line: this block is
 # the single source of truth.
 x-images:
-  cs2-classic-server: &cs2-classic-server-image ${CS2_CLASSIC_SERVER_IMAGE_TAG:-joedwards32/cs2:${CS2_CLASSIC_SERVER_IMAGE_VERSION:-4.0.1@sha256:34c093d24a23751fb409ae41dffe88884fb36964b365fcd25a31ec45e88ad8cf}}
+  cs2-classic-server: &cs2-classic-server-image ${CS2_CLASSIC_SERVER_IMAGE_TAG:-joedwards32/cs2:${CS2_CLASSIC_SERVER_IMAGE_VERSION:-5.0.0@sha256:90e6ef414ec29da557b9e615e7a86dd992606689a9bae31334805cf6e5d92531}}
 
 services:
   cs2-classic-server:
@@ -49,6 +49,15 @@ services:
       CS2_PW: ${CS2_CLASSIC_SERVER_PASSWORD:-}
       CS2_PORT: ${CS2_CLASSIC_SERVER_PORT:-27015}
       CS2_RCON_PORT: ${CS2_CLASSIC_SERVER_PORT:-27015}
+      # Added upstream in 5.0.0. Both carry the image's own defaults, so the
+      # server behaves identically whether or not these are set — they are
+      # here because a knob nobody can find is a knob that does not exist.
+      # How strictly the server enforces its delta-tick budget; 2 is upstream's
+      # default.
+      CS2_SERVER_DELTATICKS_ENFORCE: ${CS2_CLASSIC_SERVER_DELTATICKS_ENFORCE:-2}
+      # Whether GOTV relays player voice. 1 is upstream's default; set 0 where
+      # recording voice would be a privacy question rather than a feature.
+      TV_RELAYVOICE: ${CS2_CLASSIC_SERVER_TV_RELAYVOICE:-1}
       CS2_MAXPLAYERS: ${CS2_CLASSIC_SERVER_MAX_PLAYERS:-10}
       CS2_GAMEALIAS: ${CS2_CLASSIC_SERVER_GAME_ALIAS:-casual}
       CS2_MAPGROUP: ${CS2_CLASSIC_SERVER_MAP_GROUP:-mg_active}
