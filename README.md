@@ -1,6 +1,7 @@
 # CS2 classic-maps server using Docker Compose
 
 [![Deployment Verification](https://github.com/heyvaldemar/cs2-classic-server-docker-compose/actions/workflows/deployment-verification.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/cs2-classic-server-docker-compose/actions/workflows/deployment-verification.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14895/badge)](https://www.bestpractices.dev/projects/14895)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Counter-Strike 2 server that plays a Steam Workshop collection of the classic maps — Assault, Militia, Dust, Aztec, Tuscan — pinned by digest, with the two things workshop mode does differently from a stock server written down.
