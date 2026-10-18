@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`update.sh` no longer stops without a word when a release adds a variable and no compose file requires one.** The search for `${VAR:?}` came back empty, and under `pipefail` that empty result ended the script with status 1 right after it listed the new variables.
 - **`update.sh` stops on a `.env` it cannot read, before the checkout.** It used to fall through: every new required variable read as "not set", or, with none, the tree moved to the new tag and `docker compose up` failed on the permission. Now it names the file, its owner and mode, and changes nothing.
+- **Pin Freshness names the variable when the pin is ahead of the latest joedwards32/CS2 release.** The line read `${var}`, which is set only in the step before, so it began with a blank. It now says `CS2_CLASSIC_SERVER_IMAGE_TAG`. Only the message changed; the check passes and fails as before.
 
 ## [1.2.0] - 2026-09-20
 

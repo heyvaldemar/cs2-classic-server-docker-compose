@@ -120,7 +120,7 @@ jobs:
             echo "::error::CS2_CLASSIC_SERVER_IMAGE_TAG is behind: pinned ${pinned_version}, latest joedwards32/CS2 release is ${latest}"
             status=1
           elif [ "${pinned_version#v}" != "${latest#v}" ]; then
-            echo "${var} ${pinned_version} is ahead of the published ${latest}, which is what a maintenance release for an older branch looks like"
+            echo "CS2_CLASSIC_SERVER_IMAGE_TAG ${pinned_version} is ahead of the published ${latest}, which is what a maintenance release for an older branch looks like"
           else
             echo "CS2_CLASSIC_SERVER_IMAGE_TAG ${pinned_version} matches the latest joedwards32/CS2 release"
           fi
