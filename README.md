@@ -35,6 +35,8 @@ This is the [cs2-server-docker-compose](https://github.com/heyvaldemar/cs2-serve
 
 **Seed the volume from a plain CS2 server if you have one.** Same game, same 60 GB. `docker run --rm -v cs2-server-data:/from:ro -v cs2-classic-server-data:/to alpine cp -a /from/. /to/` once, and the second download never happens. The volume is external for the same reason as in the plain template: `docker compose down -v` must not be able to delete 80 GB.
 
+**The image's user is written down, and checked against the registry.** Every file in the volume belongs to the user the image runs as, and a volume does not follow when an image moves it. `joedwards32/cs2` moved it twice in eight days in September 2026, 1000 to 999 and back. On the machine this template comes from, the first move left both CS2 servers unable to write their logs for a day and a half, with the containers healthy, the games answering and Steam listing them. The compose file now declares `x-image-user: "1000:1000"`, and `tests/image-user.sh` fails when the pinned image runs as anyone else, so a pin refresh that moves the user cannot ship as a patch. Every release of this template so far has pinned an image that runs as 1000:1000. If one ever moves it, its notes carry the one command that re-owns the volume: `docker run --rm -v cs2-classic-server-data:/v alpine chown -R <uid>:<gid> /v`.
+
 ## Administration
 
 ```bash
@@ -54,7 +56,9 @@ The pin lives in the `x-images` block at the top of the compose file, as an inte
 
 `tests/e2e-healthcheck.sh` runs five assertions against a real container and needs no CS2 download: the exact check is green with the game running, the substring check is green too, and after the game is killed the exact one goes red while the substring one stays green with the wrapper still standing.
 
-CI runs it on every push alongside shell and workflow linting, a Trivy scan of the pinned image, and a daily check that the pin still resolves to what upstream publishes and matches the latest release.
+`tests/image-user.sh` asks the registry, without pulling, what the pinned image runs as, compares it with `x-image-user`, and then runs again on a copy of the compose file declaring another user, which must fail.
+
+CI runs both on every push alongside shell and workflow linting, a Trivy scan of the pinned image, and a daily check that the pin still resolves to what upstream publishes and matches the latest release.
 
 CI does not boot the game. A GitHub runner has neither the disk for 60 GB of game content nor the hours, and a test that pretends otherwise never runs.
 
