@@ -48,6 +48,8 @@ docker compose -p cs2-classic exec cs2-classic-server rcon ds_workshop_changelev
 * * * * * /path/to/cs2-classic-server-docker-compose/scripts/botguard.sh >> /var/log/cs2-classic-botguard.log 2>&1
 ```
 
+The bot guard is read whole before it runs. bash reads a script as it executes it, from the same byte offset in whatever the file holds by then, so a guard started by cron while its file is being saved in place by an editor would run shifted text. Its body is one brace group ending in `exit`, which bash parses in full first; `tests/read-whole.sh` rewrites the file under a running copy, with and without the braces. A `git pull` or `./update.sh` writes a new file, which a running copy never sees.
+
 ## Updating
 
 The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the version this repository has tested. Valve updates CS2 often and the server refuses connections from a client on a newer build; the daily freshness check compares the pin against the latest image release and against the registry. `./update.sh` does that on purpose: it moves to the latest release tag, refuses to cross a major unattended, and names any new required variable before anything has moved.

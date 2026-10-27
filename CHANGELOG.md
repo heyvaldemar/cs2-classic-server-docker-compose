@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **`scripts/botguard.sh` is read whole before it runs.** bash reads a script as it executes it and, after each command, reads on from the same byte offset in whatever the file holds by then. Cron starts the guard every minute; on the server this template comes from, a timer started a script while its file was being edited in place, and the run died on a syntax error. The guard's body is now one brace group, parsed in full before its first line runs, ending in `exit`. `tests/read-whole.sh` checks its shape and rewrites its file under a running copy: wrapped, it finishes as it started; unwrapped, it runs the new text. CI now also runs ShellCheck on the guard and on `update.sh`.
 
 ## [1.2.2] - 2026-10-25
 

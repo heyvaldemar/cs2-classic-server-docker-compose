@@ -2,8 +2,8 @@
 # Keep the bot count where the config says, on a workshop-mode server.
 #
 # WHY A GUARD INSTEAD OF CONFIG. This server runs a workshop collection, and
-# CS2's workshop mode ignores parts of gamemode_casual_server.cfg — the log
-# literally says "DISALLOWED WORKSHOP CONVAR". So a bot_quota set to 0 in the
+# CS2's workshop mode ignores parts of gamemode_casual_server.cfg; the log
+# says "DISALLOWED WORKSHOP CONVAR". So a bot_quota set to 0 in the
 # config holds until the next map change, and then the bots come back. Run
 # this from cron every minute: if the config says zero bots and A2S reports
 # some, it kicks them over rcon. With any other quota it does nothing.
@@ -11,6 +11,17 @@
 # Everything talks to the server from inside its own network namespace: the
 # query port and rcon are never reached over the host, and the rcon password
 # travels on stdin, never in argv where `ps` would show it.
+#
+# READ WHOLE BEFORE IT RUNS. bash reads a script as it executes it and, after
+# each command, reads on from the same byte offset in whatever the file holds
+# by then. Cron starts this every minute; on the server this template comes
+# from, a timer started a script while its file was being edited in place: a
+# syntax error and a failed run. The body is one brace group, which bash
+# parses in full before the first line runs, ending in exit, and
+# tests/read-whole.sh rewrites this file under a running copy both ways. (A
+# git checkout, and so update.sh, writes a new file rather than this one,
+# which a running copy never sees; an editor that saves in place does not.)
+{
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
@@ -61,3 +72,5 @@ def rcon(cmd):
 rcon("bot_quota 0"); rcon("bot_kick")
 ' >/dev/null 2>&1
 echo "$(date '+%F %T') kicked $bots bot(s) after a map change"
+exit
+}
