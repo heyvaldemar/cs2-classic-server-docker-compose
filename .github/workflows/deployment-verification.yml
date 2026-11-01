@@ -95,8 +95,9 @@ jobs:
           category: trivy-${{ matrix.name }}
 
   healthcheck:
-    name: The health check, in both directions
+    name: The health check, both ways, and the Steam check, against stubs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,13 +106,14 @@ jobs:
         # Pinned, and the same image a maintainer runs locally: Ubuntu's
         # packaged shellcheck is a different version with different defaults.
         run: |
-          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 scripts/botguard.sh tests/e2e-healthcheck.sh tests/image-user.sh tests/read-whole.sh update.sh
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 scripts/*.sh tools/*.sh tests/*.sh update.sh
 
-      - name: The bot guard is read whole before it runs
-        # Cron starts it every minute; bash reads a script as it runs it, so
-        # an edit in place mid-run executes shifted text. The test checks the
-        # guard is one brace group, and rewrites its file under a running
-        # copy, wrapped and unwrapped.
+      - name: The bot guard and the Steam check are read whole before they run
+        # Cron starts the guard every minute and a timer the Steam check every
+        # fifteen; bash reads a script as it runs it, so an edit in place
+        # mid-run executes shifted text. The test checks each is one brace
+        # group, and rewrites its file under a running copy, wrapped and
+        # unwrapped.
         run: ./tests/read-whole.sh
 
       - name: Prove the exact match catches what a substring match misses
@@ -130,6 +132,17 @@ jobs:
         # declares another user and must fail. A pin refresh that moves the
         # image's user stops here instead of shipping as a patch.
         run: ./tests/image-user.sh
+
+      - name: The Steam check, every branch, against stubbed answers
+        # CI cannot boot CS2 (60 GB), so the decisions are driven by stubbed
+        # A2S and Steam answers instead: current, behind with people on,
+        # behind and empty (restart, then proof from Steam), three tries a
+        # day, silence, one update per host per pass - and four plants, each
+        # a copy with one rule removed, seen doing what the rule prevents.
+        run: bash tests/steam-uptodate.sh
+
+      - name: The timer keeps running the night the clocks go back
+        run: bash tests/timers.sh
 
       - name: The compose file parses with the shipped defaults
         run: |
