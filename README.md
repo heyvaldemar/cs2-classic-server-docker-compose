@@ -40,13 +40,15 @@ This is the [cs2-server-docker-compose](https://github.com/heyvaldemar/cs2-serve
 ## Administration
 
 ```bash
-docker compose -p cs2-classic exec cs2-classic-server rcon status
-docker compose -p cs2-classic exec cs2-classic-server rcon ds_workshop_listmaps
-docker compose -p cs2-classic exec cs2-classic-server rcon ds_workshop_changelevel cs_assault
+tools/rcon.sh status
+tools/rcon.sh ds_workshop_listmaps
+tools/rcon.sh ds_workshop_changelevel cs_assault
 
 # a cron line for the bot guard
 * * * * * /path/to/cs2-classic-server-docker-compose/scripts/botguard.sh >> /var/log/cs2-classic-botguard.log 2>&1
 ```
+
+Up to v1.3 this said `docker compose -p cs2-classic exec cs2-classic-server rcon status`, and rcon could not work at all, for two reasons. The image has no rcon program. And the compose file set `CS2_RCON_PORT` to the game port, which makes the image's entry script start `socat` on that TCP port, forwarding it to itself, before the game starts: the game never got its rcon socket, and every connection was closed unanswered. Both were measured on a real CS2 booted on a CI runner in the plain CS2 template, from the same image on 2026-11-01 (73 GB, 22 minutes): with the old file the connection was closed ([run](https://github.com/heyvaldemar/cs2-server-docker-compose/actions/runs/41369517037)); without `CS2_RCON_PORT`, `tools/rcon.sh status` came back with the hostname and version 1.41.9.4, a wrong password was refused, and Steam called the server current ([run](https://github.com/heyvaldemar/cs2-server-docker-compose/actions/runs/41372125676)). `tools/rcon.sh` runs the protocol in the image's own python3 from inside the container and takes the password from `.env` on stdin, never from the command line where `ps` would show it. The bot guard's kicks went over the same socket and never reached the game either; it does now.
 
 The bot guard is read whole before it runs. bash reads a script as it executes it, from the same byte offset in whatever the file holds by then, so a guard started by cron while its file is being saved in place by an editor would run shifted text. Its body is one brace group ending in `exit`, which bash parses in full first; `tests/read-whole.sh` rewrites the file under a running copy, with and without the braces. A `git pull` or `./update.sh` writes a new file, which a running copy never sees.
 
@@ -87,7 +89,9 @@ The pin lives in the `x-images` block at the top of the compose file, as an inte
 
 CI runs all of them on every push alongside shell and workflow linting, a Trivy scan of the pinned image, and a daily check that the pin still resolves to what upstream publishes and matches the latest release.
 
-CI does not boot the game. A GitHub runner has neither the disk for 60 GB of game content nor the hours, and a test that pretends otherwise never runs.
+`tests/rcon.sh` runs `tools/rcon.sh` in the pinned image's own python3 against `tests/fixtures/fake-rcon.py`, started in the pinned image as this compose file's service: `status` read to its end marker, a server that never answers the marker (read until it goes quiet, no hang), a wrong password, no password, and a plant, a client that waits only for the marker. It also fails if `CS2_RCON_PORT` comes back at the game port, with a plant that puts it back.
+
+CI does not boot the game on every push. The install is 73 GB and took 22 minutes on a runner, measured once on 2026-11-01, from the same image in the plain CS2 template, to prove rcon and the Steam check against a real server.
 
 ---
 

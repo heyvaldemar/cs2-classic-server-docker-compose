@@ -36,11 +36,14 @@ cid="$(docker compose -p "$PROJECT" ps -q cs2-classic-server 2>/dev/null || true
 
 port="$(grep -E '^CS2_CLASSIC_SERVER_PORT=' .env 2>/dev/null | head -1 | cut -d= -f2-)"
 port="${port:-27015}"
+# The python both queries below run in, pinned by digest: the rcon password
+# goes into it on stdin, so the tag being moved must not change what runs.
+probe="${STEAM_UPTODATE_PROBE_IMAGE:-python:3.13-alpine@sha256:7984cf56ceaddebe4fefeb75d64000b9f45d8b77b11a09b24524da6cdc3af0c8}"
 
 # How many bots are on right now? A2S_INFO carries the bot count; an
 # unanswered query is treated as zero, because a server that does not answer
 # has bigger problems than bots.
-bots="$(docker run --rm --network "container:$cid" -e PORT="$port" python:3.13-alpine python3 -c '
+bots="$(docker run --rm --network "container:$cid" -e PORT="$port" "$probe" python3 -c '
 import os, socket
 port = int(os.environ["PORT"])
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(5)
@@ -59,7 +62,7 @@ except Exception:
 pw="$(grep -E '^CS2_CLASSIC_SERVER_RCON_PASSWORD=' .env | head -1 | cut -d= -f2-)"
 [ -n "$pw" ] || { echo "CS2_CLASSIC_SERVER_RCON_PASSWORD is not set in .env" >&2; exit 1; }
 
-printf '%s\n' "$pw" | docker run --rm -i --network "container:$cid" -e PORT="$port" python:3.13-alpine python3 -c '
+printf '%s\n' "$pw" | docker run --rm -i --network "container:$cid" -e PORT="$port" "$probe" python3 -c '
 import os, socket, struct, sys, time
 pw = sys.stdin.readline().rstrip("\n"); port = int(os.environ["PORT"])
 def pkt(i, t, b):
