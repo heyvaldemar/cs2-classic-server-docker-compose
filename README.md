@@ -18,7 +18,7 @@ The first start downloads roughly 60 GB through SteamCMD and then the collection
 
 ```bash
 docker compose -p cs2-classic logs -f cs2-classic-server
-docker compose -p cs2-classic ps          # healthy once the game process is up
+docker compose -p cs2-classic ps          # healthy once the game answers A2S_INFO
 ```
 
 This is the [cs2-server-docker-compose](https://github.com/heyvaldemar/cs2-server-docker-compose) template with a workshop collection in front of it. Everything that template knows — the exact-match health check, the external volume, the port rule, the measured limits — applies here and is not repeated. What follows is what changes when the maps come from the Workshop.
@@ -56,6 +56,8 @@ The bot guard is read whole before it runs. bash reads a script as it executes i
 
 ## Keeping the game current
 
+**The health check asks the game, not its process.** `tools/healthcheck.sh`, mounted read-only, sends A2S_INFO, the query every server browser sends, to the game port and is healthy only on the engine's reply. Up to v1.3.3 it looked for `cs2` in `/proc`, and a hung or stopped game keeps its process. A map change, a workshop map's included, silences it for seconds; one check tries twice, and Docker allows three misses at a 60-second interval. Each check ends within 7 seconds. **It asks from inside the container**, at the address the game answers on: healthy proves the server answers there, not that the port is published on the host or open in your firewall.
+
 **A healthy server is not a joinable one.** On the machine this template comes from, Team Fortress 2 ran out of date for days in October 2026 while every check passed: the container was healthy, A2S answered, Steam listed the server, and the image watchers had nothing to say because the image had not changed. Players on the current client cannot join a server Steam calls out of date. Steam answers that question directly: `ISteamApps/UpToDateCheck` takes the version a server reports over A2S and says whether it is still accepted. `tools/steam-uptodate.sh` asks it every fifteen minutes, and this image updates the game on every start, so a restart is the update:
 
 - **current**: nothing.
@@ -83,7 +85,7 @@ The pin lives in the `x-images` block at the top of the compose file, as an inte
 
 ## Testing
 
-`tests/e2e-healthcheck.sh` runs five assertions against a real container and needs no CS2 download: the exact check is green with the game running, the substring check is green too, and after the game is killed the exact one goes red while the substring one stays green with the wrapper still standing.
+`tests/e2e-healthcheck.sh` runs the health check in the pinned image against a stand-in that answers A2S_INFO, answers after a challenge, stays silent, or is not there: healthy, healthy, unhealthy within 7 seconds, unhealthy.
 
 `tests/image-user.sh` asks the registry, without pulling, what the pinned image runs as, compares it with `x-image-user`, and then runs again on a copy of the compose file declaring another user, which must fail.
 
@@ -93,7 +95,7 @@ CI runs all of them on every push alongside shell and workflow linting, a Trivy 
 
 `tests/rcon.sh` runs `tools/rcon.sh` in the pinned image's own python3 against `tests/fixtures/fake-rcon.py`, started in the pinned image as this compose file's service: `status` read to its end marker, a server that never answers the marker (read until it goes quiet, no hang), a wrong password, no password, and a plant, a client that waits only for the marker. It also fails if `CS2_RCON_PORT` comes back at the game port, with a plant that puts it back.
 
-CI does not boot the game on every push. The install is 73 GB and took 22 minutes on a runner, measured once on 2026-11-01, from the same image in the plain CS2 template, to prove rcon and the Steam check against a real server.
+**The real server** runs in `.github/workflows/real-server.yml`, not on every push: the install is 73 GB and took 22 minutes on a runner (measured 2026-11-01, from the same image in the plain CS2 template). It installs and boots the game, samples the health check before the game runs and needs it red, waits for it to go green on the engine's A2S answer, changes the map over rcon and needs it answering again on the new map with Docker healthy throughout, then **stops the game** with SIGSTOP and needs it red while the old `/proc` check stays green, and green again after SIGCONT. It runs on a push or pull request that touches the health check, its stand-in test, the compose file (every image pin is there), `.env.example` or the workflow itself, so a pin update meets the real server before it is merged; every Tuesday at 04:17 UTC; and by hand.
 
 ---
 
