@@ -19,8 +19,59 @@ x-images:
 x-image-user: "1000:1000"
 
 services:
+  # ONE SHOT, BEFORE THE SERVER: THE GAME DIRECTORY BELONGS TO THE GAME'S USER.
+  # The server bind-mounts mapcycle.txt and gamemode_casual_server.cfg INSIDE
+  # the install directory. On a volume that is still empty, Docker creates the
+  # missing directories for those mount points, game/, game/csgo/ and
+  # game/csgo/cfg/, owned by root, mode 0755, and the image runs as 1000.
+  # SteamCMD then downloads all 73 GB into steamapps/, cannot move a single
+  # file into game/, and stops with "Error! App '730' state is 0x602 after
+  # update job"; the image tries three times, exits, restarts, and downloads
+  # again, for as long as it runs. Measured in CI on 2026-11-09; up to v1.3.x
+  # every first start on a fresh volume did this, and only a volume seeded
+  # from a plain CS2 server's (see the end of this file) escaped it. This
+  # container hands the install directory and those three directories to
+  # 1000:1000 (x-image-user, above), and nothing else: a non-recursive chown
+  # of four directories, every start, a no-op once they are right. It runs
+  # the pinned image itself so that an empty volume is first filled from the
+  # image, owner and mode included, exactly as the server would fill it.
+  # tests/volume-owner.sh proves it both ways on a fresh volume.
+  cs2-classic-server-init:
+    image: *cs2-classic-server-image
+    security_opt:
+      - no-new-privileges:true
+    # Root, with every capability dropped but the two this needs: CHOWN, and
+    # DAC_OVERRIDE for a directory the game's user owns that is missing a
+    # child (an install interrupted half-way).
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.5"
+    network_mode: none
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        set -eu; d=/home/steam/cs2-dedicated;
+        mkdir -p "$$d/game/csgo/cfg";
+        chown 1000:1000 "$$d" "$$d/game" "$$d/game/csgo" "$$d/game/csgo/cfg";
+        echo "the install directory and game/, game/csgo/, game/csgo/cfg/ belong to 1000:1000"
+    volumes:
+      - cs2-classic-server-data:/home/steam/cs2-dedicated
+    restart: "no"
+
   cs2-classic-server:
     image: *cs2-classic-server-image
+    depends_on:
+      cs2-classic-server-init:
+        condition: service_completed_successfully
     # Handles untrusted input from the internet and cannot gain privileges
     # through a setuid binary.
     security_opt:

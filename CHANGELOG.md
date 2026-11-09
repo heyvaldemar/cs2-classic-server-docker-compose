@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A first start on a fresh volume installs the game.** The server bind-mounts `mapcycle.txt` and `gamemode_casual_server.cfg` inside the install directory, so on an empty volume Docker created `game/`, `game/csgo/` and `game/csgo/cfg/` owned by root, and the image runs as 1000. SteamCMD downloaded all 73 GB, could not move a file into `game/`, stopped with `Error! App '730' state is 0x602 after update job`, and the image tried again, for as long as it ran: measured in the Real Server runs of 2026-11-09, the longest 278 minutes. Every release up to v1.3.x did this on a fresh volume; a volume seeded from a plain CS2 server's, as the README suggests for a host that runs both, was not affected. A one-shot service, `cs2-classic-server-init`, now runs before the server, in the pinned image, as root with only `CHOWN` and `DAC_OVERRIDE` and no network, and gives the install directory and those three directories, not their contents, to 1000:1000; on a working volume it changes nothing. A volume a failed first start left behind needs only the next `up -d`. `tests/volume-owner.sh` proves it on a scratch volume, with the failure as its control, on every push; Real Server checks the owners on its fresh volume and stops waiting as soon as the image gives up on SteamCMD.
+
 ### Changed
 
 - **The health check asks the game, not its process.** It looked for `cs2` in `/proc`, which a hung or stopped game keeps. `tools/healthcheck.sh`, mounted read-only, now sends A2S_INFO to the game port at the address the game answers on and is healthy only on the engine's reply (challenge handled, two tries for a map change, within 7 seconds). It reads `/proc/net/udp6` as well as `/proc/net/udp`: CS2 now binds `[::]`, a dual-stack socket only udp6 lists (measured 2026-11-08; on 2026-11-01 it bound `0.0.0.0`). It asks from inside the container, so it does not prove the port is published on the host or open in a firewall; the README says so.

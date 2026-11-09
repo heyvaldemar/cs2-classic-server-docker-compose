@@ -133,6 +133,14 @@ jobs:
         # image's user stops here instead of shipping as a patch.
         run: ./tests/image-user.sh
 
+      - name: On a fresh volume, the game's user can install
+        # The two files mounted inside the install directory make Docker
+        # create game/, game/csgo/ and game/csgo/cfg/ owned by root on an
+        # empty volume; cs2-classic-server-init hands them to the image's
+        # user. On a scratch volume, in the pinned image: without the init
+        # the write fails (the control), with it the write succeeds.
+        run: bash tests/volume-owner.sh
+
       - name: The Steam check, every branch, against stubbed answers
         # CI cannot boot CS2 (60 GB), so the decisions are driven by stubbed
         # A2S and Steam answers instead: current, behind with people on,

@@ -124,6 +124,18 @@ jobs:
           docker volume create cs2-classic-server-data >/dev/null
           $COMPOSE -f .ci-no-collection.yml up -d
 
+      - name: On the fresh volume, the game directory belongs to the game's user
+        # The volume was created empty a moment ago. Without
+        # cs2-classic-server-init, Docker leaves game/, game/csgo/ and
+        # game/csgo/cfg/ owned by root and SteamCMD can never install
+        # (see the compose file).
+        run: |
+          cid="$($COMPOSE ps -q cs2-classic-server)"
+          docker logs "$($COMPOSE ps -a -q cs2-classic-server-init)" 2>&1 | tail -3
+          own="$(docker exec "$cid" stat -c '%u:%g %n' /home/steam/cs2-dedicated /home/steam/cs2-dedicated/game /home/steam/cs2-dedicated/game/csgo /home/steam/cs2-dedicated/game/csgo/cfg)"
+          echo "$own"
+          [ "$(awk '$1 != "1000:1000"' <<<"$own")" = "" ] || { echo "::error::a directory in the install path is not 1000:1000"; exit 1; }
+
       - name: While SteamCMD downloads, nothing is bound and the check is red
         run: |
           cid="$($COMPOSE ps -q cs2-classic-server)"
@@ -139,17 +151,28 @@ jobs:
       - name: Wait for the health check to go green
         run: |
           cid="$($COMPOSE ps -q cs2-classic-server)"
-          # 300 minutes: 73 GB took 22 minutes on 2026-11-01, and on 2026-11-09
-          # reached 99% in 80 and 60% in 150, at whatever speed Steam's content
-          # servers give a runner. GitHub stops a job at six hours.
+          # Up to 300 minutes (GitHub stops a job at six hours). The plain CS2
+          # template's 73 GB arrive in about 20 on the same runners. The long
+          # runs here on 2026-11-09 (99% at 80 minutes, 60% at 150, 0x602 at
+          # 278) were SteamCMD failing to install into a root-owned game/ and
+          # downloading again; how much of that time was download speed is
+          # not known, so the clock stays long. A restart ends the wait at
+          # once: the image retries SteamCMD three times inside the container
+          # and exits only when all three failed (or the server died).
           for _ in $(seq 1 1800); do
             s="$(docker inspect "$cid" --format '{{.State.Health.Status}}' 2>/dev/null || echo none)"
             [ "$s" = healthy ] && { echo "health: $s"; docker exec "$cid" bash /healthcheck.sh 27015; exit 0; }
             [ "$s" = unhealthy ] && break
+            r="$(docker inspect "$cid" --format '{{.RestartCount}}' 2>/dev/null || echo 0)"
+            [ "$r" = 0 ] || { echo "::error::the container restarted: SteamCMD failed three times, or the server exited"; break; }
             sleep 10
           done
           echo "::error::the server never reported healthy"
-          $COMPOSE logs --tail 80
+          echo "--- SteamCMD's attempts and failures, with times"
+          $COMPOSE logs --timestamps --no-log-prefix cs2-classic-server 2>/dev/null | grep -E "Retrying SteamCMD|Removing steamapps|SteamCMD failed|Error! App|Success! App" | head -20
+          echo "--- the container restarted $(docker inspect "$cid" --format '{{.RestartCount}}') time(s); the install path's owners"
+          docker exec "$cid" stat -c '%u:%g %n' /home/steam/cs2-dedicated /home/steam/cs2-dedicated/game /home/steam/cs2-dedicated/game/csgo /home/steam/cs2-dedicated/game/csgo/cfg
+          $COMPOSE logs --timestamps --tail 80
           echo "--- the health check's own words, last runs"
           docker inspect "$cid" --format '{{range .State.Health.Log}}exit {{.ExitCode}}: {{.Output}}{{end}}' | tail -c 2000
           echo "--- UDP sockets in the container (IPv4, then IPv6)"
