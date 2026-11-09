@@ -43,7 +43,7 @@ probe="${STEAM_UPTODATE_PROBE_IMAGE:-python:3.13-alpine@sha256:7984cf56ceaddebe4
 # How many bots are on right now? A2S_INFO carries the bot count; an
 # unanswered query is treated as zero, because a server that does not answer
 # has bigger problems than bots.
-bots="$(docker run --rm --network "container:$cid" -e PORT="$port" "$probe" python3 -c '
+bots="$(PORT="$port" docker run --rm --network "container:$cid" -e PORT "$probe" python3 -c '
 import os, socket
 port = int(os.environ["PORT"])
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(5)
@@ -62,7 +62,7 @@ except Exception:
 pw="$(grep -E '^CS2_CLASSIC_SERVER_RCON_PASSWORD=' .env | head -1 | cut -d= -f2-)"
 [ -n "$pw" ] || { echo "CS2_CLASSIC_SERVER_RCON_PASSWORD is not set in .env" >&2; exit 1; }
 
-printf '%s\n' "$pw" | docker run --rm -i --network "container:$cid" -e PORT="$port" "$probe" python3 -c '
+printf '%s\n' "$pw" | PORT="$port" docker run --rm -i --network "container:$cid" -e PORT "$probe" python3 -c '
 import os, socket, struct, sys, time
 pw = sys.stdin.readline().rstrip("\n"); port = int(os.environ["PORT"])
 def pkt(i, t, b):
