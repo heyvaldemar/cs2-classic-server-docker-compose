@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.4.0] - 2026-11-09
+
 ### Fixed
 
 - **A first start on a fresh volume installs the game.** The server bind-mounts `mapcycle.txt` and `gamemode_casual_server.cfg` inside the install directory, so on an empty volume Docker created `game/`, `game/csgo/` and `game/csgo/cfg/` owned by root, and the image runs as 1000. SteamCMD downloaded all 73 GB, could not move a file into `game/`, stopped with `Error! App '730' state is 0x602 after update job`, and the image tried again, for as long as it ran: measured in the Real Server runs of 2026-11-09, the longest 278 minutes. Every release up to v1.3.x did this on a fresh volume; a volume seeded from a plain CS2 server's, as the README suggests for a host that runs both, was not affected. A one-shot service, `cs2-classic-server-init`, now runs before the server, in the pinned image, as root with only `CHOWN` and `DAC_OVERRIDE` and no network, and gives the install directory and those three directories, not their contents, to 1000:1000; on a working volume it changes nothing. A volume a failed first start left behind needs only the next `up -d`. `tests/volume-owner.sh` proves it on a scratch volume, with the failure as its control, on every push; Real Server checks the owners on its fresh volume and stops waiting as soon as the image gives up on SteamCMD.
@@ -17,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A new workflow, Real Server, boots the game and proves the check against it.** Red before the game runs, green on the engine's A2S answer, answering again after a map change with Docker healthy throughout, red with the game stopped by SIGSTOP while the old `/proc` check stays green, green again after SIGCONT. The install is 73 GB, so it runs on a push or pull request that touches the check, its test, the compose file, `.env.example` or the workflow, every Tuesday, and by hand. Every push runs the check in the pinned image against a stand-in.
 - **The README names Docker Engine 29.4.2.** That release alone stops SteamCMD, which this image runs to install and update the game (measured on this template's pinned image in tf2-server-docker-compose run 42496129688): upgrade to 29.4.3 or later, which reverted the rule, or point the daemon's `seccomp-profile` at the profile 29.4.3 ships. Ubuntu 26.04's own `docker.io` (27.5.1) never had it; on GitHub Actions the ubuntu-26.04 runner image ships it ([actions/runner-images#14790](https://github.com/actions/runner-images/issues/14790), moving to 29.7.2 in [#15205](https://github.com/actions/runner-images/pull/15205)). Documentation only.
 - **Helper containers take their values by name.** Both bot-guard probes in `scripts/botguard.sh` were started with `-e PORT=…`. None of them is a secret, but fleet conformance now flags any value expanded into `-e NAME=` (a name says nothing about what it carries), so each is set for that one command and passed as `-e NAME`. Nothing a deployment does changes.
-
 ## [1.3.3] - 2026-11-01
 
 ### Changed
@@ -107,7 +110,8 @@ ired.** A Game Server Login Token drives one server;
   and the latest image release, and the health-check suite. It deliberately
   does not boot the game.
 
-[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.0...v1.3.1
