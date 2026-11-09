@@ -68,6 +68,10 @@ services:
       FAKE_MARKER: "$1"
     healthcheck:
       disable: true
+    depends_on: !reset {}
+  # The one-shot that owns the volume's directories has no volume here.
+  $SERVICE-init:
+    profiles: [not-in-this-test]
 volumes: !reset {}
 YML
   sed -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' .env.example >"$T/.env"
