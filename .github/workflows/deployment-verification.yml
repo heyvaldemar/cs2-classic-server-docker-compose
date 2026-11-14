@@ -106,7 +106,7 @@ jobs:
         # Pinned, and the same image a maintainer runs locally: Ubuntu's
         # packaged shellcheck is a different version with different defaults.
         run: |
-          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 scripts/*.sh tools/*.sh tests/*.sh update.sh
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 scripts/*.sh tools/*.sh hooks/*.sh tests/*.sh update.sh
 
       - name: The bot guard and the Steam check are read whole before they run
         # Cron starts the guard every minute and a timer the Steam check every
@@ -148,6 +148,13 @@ jobs:
         # day, silence, one update per host per pass - and four plants, each
         # a copy with one rule removed, seen doing what the rule prevents.
         run: bash tests/steam-uptodate.sh
+
+      - name: A crash Docker restarts is said once, and three in a day fail
+        # A real container under Docker's restart policy that prints a crash
+        # line and exits 3: the first run writes the count down, the crash is
+        # said once with its exit code and line, a restart by hand starts the
+        # count afresh, and three restarts by the policy in 24 hours exit 1.
+        run: bash tests/restarts.sh
 
       - name: rcon, against a stand-in inside the pinned image
         # The README's rcon command up to v1.3 named a program the image does

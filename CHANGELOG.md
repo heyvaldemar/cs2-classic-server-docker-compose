@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The game server token, the rcon password and the join password are no longer on the server's command line.** The image put all three there (`+sv_setsteamaccount`, `+rcon_password`, `+sv_password`), readable by every process in the container and by `ps` on the host for as long as the server ran. The compose file now passes them to the image empty, and `hooks/pre.sh`, the image's pre-start hook, writes them into `game/csgo/cfg/secrets.cfg` (mode 600), which the server executes at start and on every map. If the file cannot be written and read back whole, or a value holds a double quote or a line break, the container stops rather than start a server without its secrets. CS2 also printed its own command line at start, the token with it, into `docker compose logs`: if you ever posted those logs, renew the game server token.
+- **A `;` in a password no longer runs as a shell command.** The image builds the server's command line with `eval`, so a password containing `;` (or `$(…)`) was executed by the container's shell at every start. No password reaches that `eval` any more.
+
 ### Fixed
 
+- **A server with only bots on it no longer crashes after some 15,000 bot deaths.** `weapon_max_before_cleanup` and `weapon_auto_cleanup_time` default to 0, so every dropped weapon stayed on the map. With only bots on, the warmup waits for a human and never ends, each bot death left a pistol behind, and at 16,384 networkable entities the engine stopped ("Ran out of networkable entities") and segfaulted; Docker restarted it with the health check green. On a server I run with real players that happened eleven times since August. `hooks/pre.sh` now writes 64 and 120 into `server.cfg`, which runs on every map, a workshop map's included; two variables change them. Real Server reads both over rcon after the start and after a map change.
+- **The health check could cut its own request in two.** bash writes printf's output line by line, so the query echoing the server's challenge went out as two datagrams whenever the challenge held a newline byte (0x0a), and that try went unanswered. The request now goes to a file first and out in one write. `tests/e2e-healthcheck.sh` proves it against a stand-in whose challenge holds one: the v1.4 check sends 26 and 3 bytes and stays unhealthy, this one one datagram of 29.
+
 - **An index pushed again over the same build is no longer reported as drift.** The daily pin check compared each pin with the digest the tag's index has now and failed on any difference, so a publisher re-pushing the index over the very same images (a platform added, an attestation rewritten) turned it red for an image nobody rebuilt, and no pin would ever move to turn it green. It now also compares the linux/amd64 build under both digests, the one CI runs and proves: the same build passes with a notice naming both digests, a new build fails as drift exactly as before, and a build that cannot be read still fails.
+
+### Added
+
+- **The timer reports a crash Docker restarted.** The health check cannot see one: it runs inside the container, which the restart replaces. `tools/steam-uptodate.sh` now writes down the container's name, id and Docker's `RestartCount` on each run and, when the count grows, says once "the server restarted N times since <time>, last exit code X, last finished <time>" with the signal named and the reason when it can tell (Docker's oom event, or the last crash line from the log, long tokens masked); three or more in 24 hours exit 1. A recreated container and a count set back to 0 by `docker restart` start afresh (so a crash in the same window as a restart by hand is not seen). The exit code and a kill for memory come from Docker's die and oom events: a restarted container's `.State.ExitCode` reads 0 and `.State.OOMKilled` false again. Proven against real containers under the restart policy, one that crashes and one that runs out of 16 MB (`tests/restarts.sh`) and on the real server (the game killed with SIGSEGV).
+
+### Changed
+
+- **CI proves no secret leaks, on the real server.** `tests/secret-probe.sh` gives every secret the compose file passes a value of its own (the token is the real one, from a repository secret) and requires it in no `docker compose logs`, no game log, no command line in the container and no `ps` on the host, after the first start and again after a restart, with a self-test that plants a canary in all three places, and watches the host's `ps` and the container's command lines the whole time the rcon client runs. `real-server.yml` also proves the token is in effect (the server's SteamID is a persistent game server's), the join password is (the server's `sv_password`, read over rcon the moment it first answers, is the planted value, and empty with none set, so an open server stays open; CS2's A2S reports no password either way) and a wrong rcon password is refused.
 
 ## [1.4.0] - 2026-11-09
 
