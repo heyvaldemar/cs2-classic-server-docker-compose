@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.6.0] - 2026-11-14
+
 ### Fixed
 
 - **The hook's lines in `server.cfg` cannot pile up.** `hooks/pre.sh` appended `exec secrets.cfg` and the two weapon cleanup settings to `server.cfg` on every start. The image copies a fresh `server.cfg` before the hook runs, so they never piled up in practice (measured: once each after a restart), but a start without that copy would have added them again each time. They are now one block between `// pre.sh begin` and `// pre.sh end` that the hook replaces, as in cs2-server-docker-compose v1.6.0; Real Server requires each line once after a restart.
@@ -141,7 +145,8 @@ ired.** A Game Server Login Token drives one server;
   and the latest image release, and the health-check suite. It deliberately
   does not boot the game.
 
-[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/heyvaldemar/cs2-classic-server-docker-compose/compare/v1.3.2...v1.3.3
