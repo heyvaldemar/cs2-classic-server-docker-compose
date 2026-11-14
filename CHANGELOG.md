@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **The hook's lines in `server.cfg` cannot pile up.** `hooks/pre.sh` appended `exec secrets.cfg` and the two weapon cleanup settings to `server.cfg` on every start. The image copies a fresh `server.cfg` before the hook runs, so they never piled up in practice (measured: once each after a restart), but a start without that copy would have added them again each time. They are now one block between `// pre.sh begin` and `// pre.sh end` that the hook replaces, as in cs2-server-docker-compose v1.6.0; Real Server requires each line once after a restart.
+
+- **A stop no longer waits out the grace period.** The image's entry script is the container's process 1, a bash script that does not pass SIGTERM on, so every stop, restart and update waited the full 30 seconds and ended in Docker's SIGKILL (the same image in cs2-server-docker-compose: 30 s of 30, exit 137, [run 43621287859](https://github.com/heyvaldemar/cs2-server-docker-compose/actions/runs/43621287859)). The compose file now runs Docker's init (tini) as process 1, with `TINI_KILL_PROCESS_GROUP`, so SIGTERM reaches the entry script and the game together. CS2 keeps no world, so nothing was lost, only the wait. `tests/clean-stop.sh` in Real Server fails a stop that needs Docker's SIGKILL: 0 s of 30, exit 143 ([run 43624294421](https://github.com/heyvaldemar/cs2-classic-server-docker-compose/actions/runs/43624294421)).
+- **A kill for memory is named even when Docker stores its oom event late.** On a GitHub runner the oom event of 1 kill in 20 was not there when the die event was, and was ten seconds later, so the timer called a kill for memory a plain SIGKILL. A 137 with no oom event yet is now read again, for up to ten seconds.
+
+### Changed
+
+- **The secret probe** names the selftest's container from the workflow, reaches the log through any process sharing process 1's output, and prints a leaked line with Steam IDs and addresses replaced.
+- **The stubbed container in the timer's tests has a neutral name** (`/game-server`). Tests only.
 
 ## [1.5.0] - 2026-11-14
 

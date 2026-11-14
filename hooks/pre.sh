@@ -63,7 +63,10 @@ chmod 600 "$__cfg/.secrets.cfg.new" || __fail "secrets.cfg could not be made pri
 __have="$(< "$__cfg/.secrets.cfg.new")"
 [ "$__have"$'\n' = "$__want" ] || __fail "secrets.cfg does not hold what was written"
 mv -f "$__cfg/.secrets.cfg.new" "$__cfg/secrets.cfg" || __fail "secrets.cfg could not be put in place"
-printf '\nexec secrets.cfg\n' >> "$__cfg/server.cfg" || __fail "server.cfg could not be told to run secrets.cfg"
+# THIS HOOK'S LINES IN server.cfg, as one block between markers, replaced on
+# every start rather than appended: the image copies server.cfg fresh on each
+# start (measured: one "exec secrets.cfg" after a restart), and should it stop
+# doing so, a block appended on every start would pile up.
 # DROPPED WEAPONS ARE CLEARED. Both settings default to 0, which keeps every
 # weapon dropped on the map until the map changes. A server whose warmup waits
 # for a human and never ends, as one with only bots on it does, then piles up
@@ -75,10 +78,21 @@ printf '\nexec secrets.cfg\n' >> "$__cfg/server.cfg" || __fail "server.cfg could
 for __n in "${CS2T_WEAPON_MAX_BEFORE_CLEANUP:-64}" "${CS2T_WEAPON_AUTO_CLEANUP_TIME:-120}"; do
   case "$__n" in ''|*[!0-9]*) __fail "the weapon cleanup settings must be whole numbers" ;; esac
 done
-printf 'weapon_max_before_cleanup %s\nweapon_auto_cleanup_time %s\n' "${CS2T_WEAPON_MAX_BEFORE_CLEANUP:-64}" "${CS2T_WEAPON_AUTO_CLEANUP_TIME:-120}" >> "$__cfg/server.cfg" \
-  || __fail "server.cfg could not take the weapon cleanup settings"
+__out=""; __in=0
+while IFS= read -r __line || [ -n "$__line" ]; do
+  case "$__line" in
+    "// pre.sh begin") __in=1; continue ;;
+    "// pre.sh end") __in=0; continue ;;
+  esac
+  [ "$__in" = 1 ] || __out+="$__line"$'\n'
+done < "$__cfg/server.cfg"
+__out+="// pre.sh begin"$'\n'"exec secrets.cfg"$'\n'
+__out+="weapon_max_before_cleanup ${CS2T_WEAPON_MAX_BEFORE_CLEANUP:-64}"$'\n'
+__out+="weapon_auto_cleanup_time ${CS2T_WEAPON_AUTO_CLEANUP_TIME:-120}"$'\n'
+__out+="// pre.sh end"$'\n'
+printf '%s' "$__out" > "$__cfg/server.cfg" || __fail "server.cfg could not take this hook's lines"
 grep -qx 'exec secrets.cfg' "$__cfg/server.cfg" || __fail "server.cfg does not run secrets.cfg"
 echo "pre.sh: secrets.cfg written and checked ($(wc -l < "$__cfg/secrets.cfg") settings), and executed by server.cfg on every map"
 unset -f __fail
-unset CS2T_STEAM_TOKEN CS2T_RCON_PASSWORD CS2T_SERVER_PASSWORD CS2T_WEAPON_MAX_BEFORE_CLEANUP CS2T_WEAPON_AUTO_CLEANUP_TIME __cfg __umask __want __have __v __n
+unset CS2T_STEAM_TOKEN CS2T_RCON_PASSWORD CS2T_SERVER_PASSWORD CS2T_WEAPON_MAX_BEFORE_CLEANUP CS2T_WEAPON_AUTO_CLEANUP_TIME __cfg __umask __want __have __v __n __out __in __line
 }

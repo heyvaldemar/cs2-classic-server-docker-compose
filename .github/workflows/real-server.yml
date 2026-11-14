@@ -23,6 +23,7 @@ on:
       - tests/fixtures/fake-a2s.py
       - tests/fixtures/port-owner.sh
       - tests/secret-probe.sh
+      - tests/clean-stop.sh
       - tests/fixtures/sv-password.sh
       - tests/fixtures/weapon-cleanup.sh
       - tools/steam-uptodate.sh
@@ -39,6 +40,7 @@ on:
       - tests/fixtures/fake-a2s.py
       - tests/fixtures/port-owner.sh
       - tests/secret-probe.sh
+      - tests/clean-stop.sh
       - tests/fixtures/sv-password.sh
       - tests/fixtures/weapon-cleanup.sh
       - tools/steam-uptodate.sh
@@ -307,7 +309,15 @@ jobs:
             sleep 10
           done
           docker exec "$cid" bash /healthcheck.sh 27015
-          echo "secrets.cfg: $(docker exec "$cid" stat -c '%U %a' /home/steam/cs2-dedicated/game/csgo/cfg/secrets.cfg), server.cfg runs it: $(docker exec "$cid" grep -c '^exec secrets.cfg' /home/steam/cs2-dedicated/game/csgo/cfg/server.cfg)"
+          echo "secrets.cfg: $(docker exec "$cid" stat -c '%U %a' /home/steam/cs2-dedicated/game/csgo/cfg/secrets.cfg)"
+          # The hook's lines once each in server.cfg after a second start, not
+          # twice: the image copies server.cfg fresh, and the hook replaces its
+          # own marked block besides.
+          for l in "exec secrets.cfg" weapon_max_before_cleanup weapon_auto_cleanup_time; do
+            n="$(docker exec "$cid" grep -c "^$l" /home/steam/cs2-dedicated/game/csgo/cfg/server.cfg)"
+            echo "server.cfg after a restart: \"$l\" $n time(s)"
+            [ "$n" = 1 ] || { echo "::error::\"$l\" is in server.cfg $n times after a restart"; exit 1; }
+          done
           tests/secret-probe.sh check "after a restart"
 
       - name: Plant - the process that answers, stopped, keeps the old check green and turns this one red
@@ -385,6 +395,18 @@ jobs:
 
       - name: The probe sees what it looks for - a canary in a log and on two command lines
         run: tests/secret-probe.sh selftest
+
+      - name: A stop - timed, with its exit code (tests/clean-stop.sh; no world to save)
+        env:
+          CLEAN_STOP_PROJECT: cs2-classic
+          CLEAN_STOP_COMPOSE: cs2-classic-server-docker-compose.yml
+        # The entry script used to be process 1 and ignore SIGTERM (30 s of
+        # 30, exit 137, the same image in cs2-server-docker-compose run
+        # 43621287859); with Docker's init the stop must not
+        # need Docker's SIGKILL.
+        run: |
+          out="$(tests/clean-stop.sh cs2-classic-server -)"; echo "$out"
+          if grep -q 'Docker sent SIGKILL' <<<"$out"; then echo "::error::the stop still ended in Docker's SIGKILL"; exit 1; fi
 
       - name: Stop
         if: always()

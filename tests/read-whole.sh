@@ -83,7 +83,7 @@ echo
 # its restart count, never grown), and Steam's answer supplied, so the run
 # ends in "current".
 mkdir -p "$T/tools" "$T/bin2"
-printf '#!/bin/sh\nsleep 2\ncase "$*" in *RestartCount*) echo "/srv-1 0123456789ab 0 2026-11-14T00:00:00Z 2026-11-14T00:00:00Z" ;; *) echo 0123456789ab ;; esac\n' >"$T/bin2/docker"
+printf '#!/bin/sh\nsleep 2\ncase "$*" in *RestartCount*) echo "/game-server 0123456789ab 0 2026-11-14T00:00:00Z 2026-11-14T00:00:00Z" ;; *) echo 0123456789ab ;; esac\n' >"$T/bin2/docker"
 printf '#!/bin/sh\necho 1.41.9.4 0 1 -\n' >"$T/bin2/probe"
 cp tools/steam-uptodate.sh "$T/tools/wrapped.sh"
 awk -v n="$(wc -l <tools/steam-uptodate.sh)" 'NR == n { next } !done && $0 == "{" { done = 1; next } { print }' tools/steam-uptodate.sh >"$T/tools/unwrapped.sh"
